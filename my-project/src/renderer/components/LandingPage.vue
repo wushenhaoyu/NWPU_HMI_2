@@ -31,51 +31,44 @@
         </div>
 
         <div v-if="value==1">
-          <div style="font-weight: 900;margin-top: 2vh;display: flex;justify-content: space-evenly;" @click="control" >
-          <div>原图 显示:</div>
+          <div style="font-weight: 900;margin-top: 2vh;display: flex;justify-content: space-evenly;" @click="openFace" >
+          <div style="width: 40%;text-align: center;">人脸检测</div>
           <el-switch
-          v-model="isShowImg"
+          v-model="isFace"
           active-text="开启"
           inactive-text="关闭"
           >
-        </el-switch>
-        </div>
-        <div style="font-weight: 900;margin-top: 2vh;display: flex;justify-content: space-evenly;"  @click="control">
-          <div>增强 显示:</div>
-          <el-switch
-          v-model="isShowImg2"
-          active-text="开启"
-          inactive-text="关闭"
-          >
-        </el-switch>
-        </div>
-        <div style="font-weight: 900;margin-top: 2vh;display: flex;justify-content: space-evenly;"  @click="control">
-          <div>特征1显示:</div>
-          <el-switch
-          v-model="isShowImg3"
-          active-text="开启"
-          inactive-text="关闭"
-          >
-        </el-switch>
-        </div>
-        <div style="font-weight: 900;margin-top: 2vh;display: flex;justify-content: space-evenly;"  @click="control">
-          <div>特征2显示:</div>
-          <el-switch
-          v-model="isShowImg4"
-          active-text="开启"
-          inactive-text="关闭"
-          >
-        </el-switch>
-        </div>
-        </div>
-      
+          </el-switch>
+          </div>
 
-        <div style="height: 20vh;"></div>
+          <div style="font-weight: 900;margin-top: 2vh;display: flex;justify-content: space-evenly;" @click="openPoint" >
+            <div style="width: 40%;text-align: center;">关键点显示</div>
+          <el-switch
+          v-model="isPoint"
+          active-text="开启"
+          inactive-text="关闭"
+          >
+          </el-switch>
+          </div>
+
+          <div style="font-weight: 900;margin-top: 2vh;display: flex;justify-content: space-evenly;" @click="openAlign" >
+            <div style="width: 40%;text-align: center;">人脸对齐</div>
+          <el-switch
+          v-model="isAlign"
+          active-text="开启"
+          inactive-text="关闭"
+          >
+          </el-switch>
+          </div>
+
+          <div style="height: 20vh;"></div>
+          <el-input style="width: 80%;" v-model="name" placeholder="请输入名字"></el-input>
         <div style="font-weight: 900;margin-top: 2vh;display: flex;justify-content: space-evenly;">
-          <el-button type="primary" style="width: 80%;font-weight: 600;" @click="openYOLO">开始识别</el-button>
+          <el-button type="primary" style="width: 80%;font-weight: 600;" @click="storageFace">录入人脸</el-button>
         </div>
         <div style="font-weight: 900;margin-top: 2vh;display: flex;justify-content: space-evenly;">
           <el-button type="primary" style="width: 80%;font-weight: 600;" @click="openCamera">开启摄像头</el-button>
+        </div>
         </div>
       </div> </div>
     </div>
@@ -94,18 +87,21 @@
       return {
         //
         isShowImg:false,
-
-        imgurl_:'http://localhost:8000/video_stream_ori/',
+        isFace:false,
+        isPoint:false,
+        isAlign:false,
+        name:'',
+        imgurl_:'http://localhost:8000/video',
         timestamp: Date.now(),
         options: [{
           value: 1,
-          label: 'easy'
+          label: '人脸操作'
         }, {
           value: 2,
-          label: 'medium'
+          label: '活体检测'
         }, {
           value: 3,
-          label: 'difficult'
+          label: '手势识别'
         }],
         value: 1
       }
@@ -117,15 +113,6 @@
       //
       imgurl(){
         return `${this.imgurl_}?t=${this.timestamp}`;
-      },
-      img1url(){
-        return `${this.img1url_}?t=${this.timestamp}`;
-      },
-      img2url(){
-        return `${this.img2url_}?t=${this.timestamp}`;
-      },
-      img3url(){
-        return `${this.img3url_}?t=${this.timestamp}`;
       }
     },
     watch: {
@@ -145,32 +132,75 @@
       open (link) {
         this.$electron.shell.openExternal(link)
       },
-      control(){
-        let data = {
-          "origin": this.isShowImg1,
-          "feature_one": this.isShowImg3,
-          "feature_two": this.isShowImg4,
-          "output": this.isShowImg2
-        }
-        this.$http.post('http://127.0.0.1:8000/control_queues',data,{ headers: { 'Content-Type': 'application/json' } })
+
+      openPoint(){
+        this.$http.get('http://127.0.0.1:8000/turn_point')
         .then(response => {
-          console.log(response.data);
+          if (response.data.status == 1)
+            {
+                this.$data.isPoint = true;
+            }
+          else{
+                this.$data.isPoint = false;
+          }
+          console.log(response.data,this.isPoint);
+        })
+      },
+      openAlign(){
+        this.$http.get('http://127.0.0.1:8000/turn_align')
+        .then(response => {
+          if (response.data.status == 1)
+            {
+                this.$data.isAlign = true;
+            }
+          else{
+                this.$data.isAlign = false;
+          }
+          console.log(response.data,this.isAlign);
+        })
+      },
+      openFace(){
+        this.$http.get('http://127.0.0.1:8000/turn_face')
+        .then(response => {
+          if (response.data.status == 1)
+            {
+                this.$data.isFace = true;
+            }
+          else{
+                this.$data.isFace = false;
+          }
+          console.log(response.data,this.isFace);
         })
         .catch(error => {
-          console.error(error);
-        });
+         console.error(error);
+        })
       },
       openCamera(){
-        this.$http.post('http://127.0.0.1:8000/openCam')
+        this.$http.get('http://127.0.0.1:8000/turn_camera')
         .then(response => {
-          console.log(response.data);
+          if (response.data.status == 1)
+            {
+                this.isShowImg = true;
+            }
+          else{
+                this.isShowImg = false;
+          }
+          console.log(response.data.status,this.isShowImg);
         })
         .catch(error => {
           console.error(error);
         });
       },
-      openYOLO(){
-        this.$http.post('http://127.0.0.1:8000/openYOLO')
+      storageFace(){
+        this.$message({
+          message: '请保证摄像头前只有一个人',
+          type: 'warning'
+        });
+        if (!this.isAlign){
+          this.openAlign()
+        }
+        let data = {'name':this.name}
+        this.$http.post('http://127.0.0.1:8000/storage_face',data)
         .then(response => {
           console.log(response.data);
         })

@@ -25,9 +25,12 @@ SECRET_KEY = "django-insecure-i9!#q(dr0s3m6gtwnek69m^l1kbfkcn!rodp$oi!^vlh(5burd
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['localhost', '127.0.0.1', '[::1]']
 
 
+CORS_ORIGIN_WHITELIST = [
+    'http://localhost:9080',
+]
 # Application definition
 
 INSTALLED_APPS = [
@@ -37,9 +40,12 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+     'corsheaders',
+     'myapp'
 ]
 
 MIDDLEWARE = [
+    'corsheaders.middleware.CorsMiddleware',
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -48,7 +54,7 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
-
+CORS_ORIGIN_ALLOW_ALL = True
 ROOT_URLCONF = "mysite.urls"
 
 TEMPLATES = [
@@ -74,23 +80,10 @@ WSGI_APPLICATION = "mysite.wsgi.application"
 # https://docs.djangoproject.com/en/4.2/ref/settings/#databases
 
 DATABASES = {
- 
-'default': {
- 
-'ENGINE': 'django.db.backends.mysql',
- 
-'NAME': 'face',
- 
-'HOST': '127.0.0.1',
- 
-'PORT': 3306,
- 
-'USER': 'root',
- 
-'PASSWORD': 'root',
- 
-}
- 
+    'default': {
+        'ENGINE': 'django.db.backends.sqlite3',  # 使用 SQLite
+        'NAME': BASE_DIR / 'db.sqlite3',  # 数据库文件位置
+    }
 }
 
 # Password validation
