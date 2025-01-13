@@ -16,7 +16,7 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path
-from myapp.views import video_feed,turn_camera,turn_face,turn_align,turn_point,storage_face
+from myapp.views import turn_head, video_feed,turn_camera,turn_face,turn_align,turn_point,storage_face,turn_eye,turn_mouth,reset_count,get_count
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("video", video_feed, name="video"),#output 
@@ -25,5 +25,10 @@ urlpatterns = [
     path("turn_align", turn_align, name="turn_align"),
     path("turn_point", turn_point, name="turn_point"),
     path("storage_face", storage_face, name="storage_face"),
+    path("turn_eye", turn_eye, name="turn_eye"),
+    path("turn_mouth", turn_mouth, name="turn_mouth"),
+    path("reset_count", reset_count, name="reset_count"),
+    path("turn_head", turn_head, name="turn_head"),
+    path("get_count", get_count, name="get_count"),
 
 ]

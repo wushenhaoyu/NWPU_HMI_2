@@ -9,7 +9,7 @@ import numpy as np
 from scipy.spatial.distance import cosine
 from django.views.decorators.csrf import csrf_exempt
 from myapp.models import Face
-from myapp.live import eye_aspect_ratio,mouth_aspect_ratio,eyebrow_jaw_distance,nose_jaw_distance
+from myapp.live import eye_aspect_ratio,mouth_aspect_ratio,nose_jaw_distance
 class VideoCamera:
 
     def __init__(self):
@@ -29,8 +29,17 @@ class VideoCamera:
 
         self.isOpenEye      = True
         self.isOpenMouth    = False
-        self.isOpenEyebrow  = False
-        self.isOpenNose     = False
+        self.isHead         = False
+
+        self.EyeCount = 0
+        self.MouthCount = 0
+        self.HeadLeftCount = 0
+        self.HeadRightCount = 0
+        self.HeadShakeCount = 0
+
+        self.EyeState = 'Open'
+        self.MouthState = 'Open'
+        self.HeadState = 'Straight'
 
     def __del__(self):
         self.video.release()
@@ -111,6 +120,12 @@ class VideoCamera:
             #print(f"No match found! (Minimum distance: {min_distance}, Threshold: {threshold})")
             return None  
 
+    def reset_count(self):
+        self.EyeCount = 0
+        self.MouthCount = 0
+        self.HeadLeftCount = 0
+        self.HeadRightCount = 0
+        self.HeadShakeCount = 0
 
 
     def get_frame(self):
@@ -125,7 +140,7 @@ class VideoCamera:
                             result = self.recognize_face(face)
                             if self.isOpenAlign:
                                     aligned_frame = self.align_face(face, frame)
-                                    print(result)
+                                    #print(result)
                                     #cv2.imwrite('aligned_face.png', aligned_face)
                                     aligned_faces = self.app.get(aligned_frame)  
                                     #print(aligned_faces)
@@ -143,11 +158,36 @@ class VideoCamera:
                             if self.isOpenEye:
                                 score = eye_aspect_ratio(face)
                                 print(score)
-                                if score > 0.25:
-                                    print('睁眼')
+                                if score > 3.3  :
+                                    if self.EyeState == 'Open':
+                                        self.EyeCount += 1
+                                    self.EyeState = 'Close'
                                 else:
-                                    print('闭眼')
-
+                                    self.EyeState = 'Open'
+                            if self.isOpenMouth:
+                                score = mouth_aspect_ratio(face)
+                                #print(score)
+                                if score > 0.37:
+                                    if self.MouthState == 'Close':
+                                        self.MouthCount += 1
+                                    self.MouthState = 'Open'
+                                else:
+                                    self.MouthState = 'Close'
+                            if self.isHead:
+                                score = nose_jaw_distance(face)
+                                face_left1, face_right1, face_left2, face_right2 = score
+                                if face_left1 > face_right1 * 1.5 and face_left2 > face_right2 * 1.5:
+                                    if self.HeadState != 'Left':
+                                        self.HeadLeftCount += 1
+                                        self.HeadState = 'Left'
+                                elif face_left1  * 1.5 < face_right1 and face_left2  * 1.5 < face_right2:
+                                    if self.HeadState != 'Right':
+                                        self.HeadRightCount += 1
+                                        self.HeadState = 'Right'
+                                else:
+                                    if self.HeadState != 'Straight':
+                                        self.HeadShakeCount += 1
+                                        self.HeadState = 'Straight'
                             if self.isOpenPoint:
                                 kps = face['landmark_2d_106']
                                 for kp in kps:
@@ -221,6 +261,59 @@ def turn_align(request):
             return JsonResponse({'status': 1, 'message': 'Face align turned on'})
     except Exception as e:
         return JsonResponse({'status': 'error', 'message': str(e)}, status=500) 
+
+def turn_eye(request):
+    try:
+        if camera.isOpenEye:
+            camera.isOpenEye = False
+            return JsonResponse({'status': 0, 'message': 'Eye detection turned off'})
+        elif not camera.isOpenEye:
+            camera.isOpenEye = True
+            return JsonResponse({'status': 1, 'message': 'Eye detection turned on'})
+    except Exception as e:
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500) 
+    
+def turn_mouth(request):
+    try:
+        if camera.isOpenMouth:
+            camera.isOpenMouth = False
+            return JsonResponse({'status': 0, 'message': 'Mouth detection turned off'})
+        elif not camera.isOpenMouth:
+            camera.isOpenMouth = True
+            return JsonResponse({'status': 1, 'message': 'Mouth detection turned on'})
+    except Exception as e:
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500) 
+    
+def turn_head(request):
+    try:
+        if camera.isHead:
+            camera.isHead = False
+            return JsonResponse({'status': 0, 'message': 'Head detection turned off'})
+        elif not camera.isHead:
+            camera.isHead = True
+            return JsonResponse({'status': 1, 'message': 'Head detection turned on'})
+    except Exception as e:
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+    
+def reset_count(request):
+    try:
+        camera.reset_count()
+        return JsonResponse({'status': 1, 'message': 'Reset count successfully'})
+    except Exception as e:
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+    
+def get_count(request):
+    try:
+        EyeCount            =         camera.EyeCount
+        MouthCount          =         camera.MouthCount
+        HeadLeftCount       =         camera.HeadLeftCount
+        HeadRightCount      =         camera.HeadRightCount
+        HeadShakeCount      =         camera.HeadShakeCount
+        return JsonResponse({'EyeCount': EyeCount, 'MouthCount': MouthCount, 'HeadLeftCount': HeadLeftCount, 'HeadRightCount': HeadRightCount, 'HeadShakeCount': HeadShakeCount})
+    
+    except Exception as e:
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+
     
 @csrf_exempt
 def storage_face(request):
