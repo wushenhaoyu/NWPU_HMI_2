@@ -9,7 +9,7 @@ import numpy as np
 from scipy.spatial.distance import cosine
 from django.views.decorators.csrf import csrf_exempt
 from myapp.models import Face
-
+from myapp.live import eye_aspect_ratio,mouth_aspect_ratio,eyebrow_jaw_distance,nose_jaw_distance
 class VideoCamera:
 
     def __init__(self):
@@ -27,48 +27,39 @@ class VideoCamera:
         self.name = ""
         self.embedding = []
 
+        self.isOpenEye      = True
+        self.isOpenMouth    = False
+        self.isOpenEyebrow  = False
+        self.isOpenNose     = False
+
     def __del__(self):
         self.video.release()
 
     def align_face(self, face, frame):
-        # 获取人脸关键点，假设提供了左右眼的坐标
-        left_eye = face['kps'][0]  # 左眼坐标
-        right_eye = face['kps'][1]  # 右眼坐标
+        left_eye = face['kps'][0]  
+        right_eye = face['kps'][1]  
 
-        # 计算两眼之间的直线距离
         eye_dist = np.linalg.norm(np.array(right_eye) - np.array(left_eye))
-
-        # 计算两眼间直线的角度（与水平线的夹角）
         dy = right_eye[1] - left_eye[1]
         dx = right_eye[0] - left_eye[0]
-        angle = np.arctan2(dy, dx) * 180 / np.pi  # 转换为角度
+        angle = np.arctan2(dy, dx) * 180 / np.pi 
 
-        # 获取旋转中心：两眼的中点
         center = ((left_eye[0] + right_eye[0]) / 2, (left_eye[1] + right_eye[1]) / 2)
-
-        # 构建旋转矩阵
         M = cv2.getRotationMatrix2D(center, angle, 1.0)  # 1.0 是缩放因子
-
-        # 旋转图像
         rotated_frame = cv2.warpAffine(frame, M, (frame.shape[1], frame.shape[0]))
 
-        # 在旋转后的图像中重新计算眼睛位置
         rotated_left_eye = np.dot(M[:, :2], np.array(left_eye).T) + M[:, 2]
         rotated_right_eye = np.dot(M[:, :2], np.array(right_eye).T) + M[:, 2]
 
-        # 计算人脸框的宽度和高度
-        bbox = face['bbox']  # 人脸边界框 [x1, y1, x2, y2]
+        bbox = face['bbox']
         face_width = bbox[2] - bbox[0]
         face_height = bbox[3] - bbox[1]
 
-        # 调整图像大小，确保宽高比保持一致，缩放到目标尺寸
         target_width = 112
         target_height = 112
         scale_factor = min(target_width / face_width, target_height / face_height)
-
         resized_face = cv2.resize(rotated_frame, None, fx=scale_factor, fy=scale_factor)
 
-        # 返回调整后的对齐人脸图像
         return resized_face
 
     def storage_face(self, frame, face , name):
@@ -99,36 +90,26 @@ class VideoCamera:
         return face_entry
     
     def recognize_face(self, face, threshold=0.4):
-        # 获取输入人脸的特征向量
+
         input_embedding = face['embedding']
-        
-        # 从数据库中获取所有人脸记录
         all_faces = Face.objects.all()
-        
-        # 初始化最小的相似度和最相似的人脸
         min_distance = float('inf')
         recognized_face = None
-        
-        # 遍历数据库中每一条人脸记录，计算与输入特征向量的距离
-        for face_entry in all_faces:
-            # 从数据库中读取特征向量
-            db_embedding = face_entry.get_feature_vector()
 
-            # 计算输入特征向量与数据库中记录的特征向量之间的余弦距离
+        for face_entry in all_faces:
+
+            db_embedding = face_entry.get_feature_vector()
             distance = cosine(input_embedding, db_embedding)
-            
-            # 如果当前距离更小，更新最相似的人脸和最小距离
             if distance < min_distance:
                 min_distance = distance
                 recognized_face = face_entry
         
-        # 判断是否找到匹配的脸，且距离小于阈值
         if recognized_face is not None and min_distance < threshold:
             #print(f"Recognized face: {recognized_face.name}, Distance: {min_distance}")
-            return recognized_face  # 返回最相似的人脸
+            return recognized_face  
         else:
             #print(f"No match found! (Minimum distance: {min_distance}, Threshold: {threshold})")
-            return None  # 没有匹配的人脸
+            return None  
 
 
 
@@ -140,15 +121,13 @@ class VideoCamera:
                     faces = self.app.get(frame)
                     if len(faces) > 0:
                         for face in faces:
-                            # 绘制边界框
                             bbox = face['bbox']
                             result = self.recognize_face(face)
-                            # 检查是否需要对齐
                             if self.isOpenAlign:
                                     aligned_frame = self.align_face(face, frame)
                                     print(result)
                                     #cv2.imwrite('aligned_face.png', aligned_face)
-                                    aligned_faces = self.app.get(aligned_frame)  # 对齐后图像重新传入获取特征
+                                    aligned_faces = self.app.get(aligned_frame)  
                                     #print(aligned_faces)
                                     if len(aligned_faces) == 1:
                                         if self.isStorageFace and result is None:
@@ -160,9 +139,15 @@ class VideoCamera:
                                         pass
                                             
                             else:
-                                embedding = face['embedding']  # 提取未对齐的特征
-                                #print(f"未对齐特征: {embedding}")
-                                                        # 绘制关键点
+                                embedding = face['embedding']  
+                            if self.isOpenEye:
+                                score = eye_aspect_ratio(face)
+                                print(score)
+                                if score > 0.25:
+                                    print('睁眼')
+                                else:
+                                    print('闭眼')
+
                             if self.isOpenPoint:
                                 kps = face['landmark_2d_106']
                                 for kp in kps:
