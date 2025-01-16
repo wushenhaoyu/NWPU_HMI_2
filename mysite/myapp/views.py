@@ -9,6 +9,8 @@ import numpy as np
 from scipy.spatial.distance import cosine
 from django.views.decorators.csrf import csrf_exempt
 from myapp.models import Face
+from ultralytics import YOLO
+import mediapipe as mp
 from myapp.live import eye_aspect_ratio,mouth_aspect_ratio,nose_jaw_distance
 class VideoCamera:
 
@@ -16,6 +18,10 @@ class VideoCamera:
         self.video = cv2.VideoCapture(0)
         self.app = FaceAnalysis(allowed_modules=['detection','recognition','landmark_2d_106'], providers=['CUDAExecutionProvider', 'CPUExecutionProvider'])      
         self.app.prepare(ctx_id=0 if torch.cuda.is_available() else -1, det_size=(640, 640))
+        self.model = YOLO(os.path.join(os.path.dirname(__file__), 'best.pt'))
+        self.mp_hands = mp.solutions.hands
+        self.hands = self.mp_hands.Hands(static_image_mode=False, max_num_hands=2, min_detection_confidence=0.5, min_tracking_confidence=0.5)
+        self.mp_drawing = mp.solutions.drawing_utils
 
         self.isOpenCamera   = False 
         self.isOpenFace     = False     #人脸检测
@@ -41,6 +47,11 @@ class VideoCamera:
         self.MouthState = 'Open'
         self.HeadState = 'Straight'
 
+
+        self.isHand = False
+        self.isHandPoint = False
+
+        self.frame = None
     def __del__(self):
         self.video.release()
 
@@ -131,15 +142,16 @@ class VideoCamera:
     def get_frame(self):
         if self.isOpenCamera:
             ret, frame = self.video.read()
+            self.frame = frame
             if ret:
                 if self.isOpenFace:
-                    faces = self.app.get(frame)
+                    faces = self.app.get(self.frame)
                     if len(faces) > 0:
                         for face in faces:
                             bbox = face['bbox']
                             result = self.recognize_face(face)
                             if self.isOpenAlign:
-                                    aligned_frame = self.align_face(face, frame)
+                                    aligned_frame = self.align_face(face, self.frame)
                                     #print(result)
                                     #cv2.imwrite('aligned_face.png', aligned_face)
                                     aligned_faces = self.app.get(aligned_frame)  
@@ -157,7 +169,7 @@ class VideoCamera:
                                 embedding = face['embedding']  
                             if self.isOpenEye:
                                 score = eye_aspect_ratio(face)
-                                print(score)
+                                #print(score)
                                 if score > 3.3  :
                                     if self.EyeState == 'Open':
                                         self.EyeCount += 1
@@ -188,17 +200,42 @@ class VideoCamera:
                                     if self.HeadState != 'Straight':
                                         self.HeadShakeCount += 1
                                         self.HeadState = 'Straight'
+
+
                             if self.isOpenPoint:
                                 kps = face['landmark_2d_106']
                                 for kp in kps:
-                                    cv2.circle(frame, (int(kp[0]), int(kp[1])), 1, (0, 0, 255), -1)
+                                    cv2.circle(self.frame, (int(kp[0]), int(kp[1])), 1, (0, 0, 255), -1)
                             if result is not None:
-                                cv2.putText(frame, result.name, (int(bbox[0]), int(bbox[1]) - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 2)
-                                cv2.rectangle(frame, (int(bbox[0]), int(bbox[1])), (int(bbox[2]), int(bbox[3])), (0, 255, 0), 2)
+                                cv2.putText(self.frame, result.name, (int(bbox[0]), int(bbox[1]) - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 2)
+                                cv2.rectangle(self.frame, (int(bbox[0]), int(bbox[1])), (int(bbox[2]), int(bbox[3])), (0, 255, 0), 2)
                             else:
-                                cv2.rectangle(frame, (int(bbox[0]), int(bbox[1])), (int(bbox[2]), int(bbox[3])), (0, 0, 255), 2)
-                                cv2.putText(frame, 'Stranger', (int(bbox[0]), int(bbox[1]) - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0, 255), 2)
-                ret, jpeg = cv2.imencode('.jpg', frame)
+                                cv2.rectangle(self.frame, (int(bbox[0]), int(bbox[1])), (int(bbox[2]), int(bbox[3])), (0, 0, 255), 2)
+                                cv2.putText(self.frame, 'Stranger', (int(bbox[0]), int(bbox[1]) - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0, 255), 2)
+                if self.isHand:
+                    detections = self.model(frame, stream=True)
+                    for detection in detections:
+                        for box in detection.boxes:
+                            # 获取边界框坐标
+                            x1, y1, x2, y2 = map(int, box.xyxy[0])  # 转换为整数
+                            conf = box.conf[0]  # 置信度
+                            cls = int(box.cls[0])  # 类别索引
+                            label = f"{self.model.names[cls]} {conf:.2f}"  # 获取类别名称和置信度
+
+                            # 绘制边界框和类别
+                            cv2.rectangle(self.frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+                            cv2.putText(self.frame, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+                    if self.isHandPoint:
+                        frame_ = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                        results = self.hands.process(frame_)
+                        if results.multi_hand_landmarks:
+                            for hand_landmarks in results.multi_hand_landmarks:
+                                self.mp_drawing.draw_landmarks(
+                                    self.frame, hand_landmarks, self.mp_hands.HAND_CONNECTIONS,
+                                    self.mp_drawing.DrawingSpec(color=(121, 22, 76), thickness=2, circle_radius=4),
+                                    self.mp_drawing.DrawingSpec(color=(250, 44, 250), thickness=2, circle_radius=2)
+                                )
+                ret, jpeg = cv2.imencode('.jpg', self.frame)
                 return jpeg.tobytes()
                     
             else:
@@ -314,7 +351,27 @@ def get_count(request):
     except Exception as e:
         return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
 
+def turn_hand(request):
+    try:
+        if camera.isHand:
+            camera.isHand = False
+            return JsonResponse({'status': 0, 'message': 'Hand detection turned off'})
+        elif not camera.isHand:
+            camera.isHand = True
+            return JsonResponse({'status': 1, 'message': 'Hand detection turned on'})
+    except Exception as e:
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
     
+def turn_hand_point(request):
+    try:
+        if camera.isHandPoint:
+            camera.isHandPoint = False
+            return JsonResponse({'status': 0, 'message': 'Hand point turned off'})
+        elif not camera.isHandPoint:
+            camera.isHandPoint = True
+            return JsonResponse({'status': 1, 'message': 'Hand point turned on'})
+    except Exception as e:
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
 @csrf_exempt
 def storage_face(request):
     try:

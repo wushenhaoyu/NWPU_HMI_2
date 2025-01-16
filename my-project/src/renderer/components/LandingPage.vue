@@ -136,6 +136,26 @@
 
 
         </div>
+        <div v-if="value==3">
+          <div style="font-weight: 900;margin-top: 2vh;display: flex;justify-content: space-evenly;" @click="openHand" >
+            <div style="width: 40%;text-align: center;">手势识别</div>
+            <el-switch
+            v-model="isHand"
+            active-text="开启"
+            inactive-text="关闭"
+            >
+          </el-switch>
+          </div>
+            <div style="font-weight: 900;margin-top: 2vh;display: flex;justify-content: space-evenly;" @click="openHandPoint" >
+            <div style="width: 40%;text-align: center;">关键点显示</div>
+            <el-switch
+            v-model="isHandPoint"
+            active-text="开启"
+            inactive-text="关闭"
+            >
+          </el-switch>
+          </div>
+        </div>
       </div> </div>
     </div>
   </el-main>
@@ -165,6 +185,8 @@
         isMouth:false,
         isHead:false,
         isGettingCount:false,
+        isHand:false,
+        isHandPoint:false,
         name:'',
         imgurl_:'http://localhost:8000/video',
         timestamp: Date.now(),
@@ -206,7 +228,7 @@
       },
       turnoffGetCount() {
         this.isGettingCount = false;
-      },
+      },  
       controlGetCount(sign){
         if(sign){
           console.log(this.isEye,this.isMouth,this.isHead);
@@ -338,6 +360,32 @@
                 this.controlGetCount(0)
           }
           console.log(response.data,this.isHead);
+        })
+      },
+      openHand(){
+        this.$http.get('http://127.0.0.1:8000/turn_hand')
+        .then(response => {
+          if (response.data.status == 1)
+            {
+                this.$data.isHand = true;
+            }
+          else{
+                this.$data.isHand = false;
+          }
+          console.log(response.data,this.isHand);
+        })
+      },
+      openHandPoint(){
+        this.$http.get('http://127.0.0.1:8000/turn_hand_point')
+        .then(response => {
+          if (response.data.status == 1)
+            {
+                this.$data.isHandPoint = true;
+            }
+          else{
+                this.$data.isHandPoint = false;
+          }
+          console.log(response.data,this.isHandPoint);
         })
       },
       reset_count(){
